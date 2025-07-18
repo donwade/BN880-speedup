@@ -60,6 +60,13 @@ Timing Messages: Timepulse Output, Timemark Results
 
 */
 
+#include <M5Unified.h>
+#include <FastLED.h>                                                                                                                                                                    
+
+#define LEDS_PIN 25
+#define LEDS_NUM 10
+CRGB ledsBuff[LEDS_NUM];
+
 
 // 4 bytes of serial silence
  const uint32_t SILENCE_MS = 1000 * (float (8 * 4) /float(9600));
@@ -217,6 +224,13 @@ void monitor(unsigned waitMs)
 }
 
 //------------------------------------------------------
+void colourBar(uint8_t R,uint8_t G, uint8_t B) 
+{
+	for (int i = 0; i < LEDS_NUM; i++) {
+		ledsBuff[i].setRGB(R, G, B);
+	}
+	FastLED.show();
+}	
 
 void loop()
 {
@@ -262,7 +276,16 @@ void loop()
 
   GPS_SendConfig(Special, sizeof(Special));
   GPS_SendConfig(test, sizeof(test));
-  GPS_SendConfig(many, sizeof(many));
+
+  while (true)
+  {
+  	bool flip;
+	flip ? colourBar(20,0,0) : colourBar(0, 20, 0);
+	flip = !flip;
+  	GPS_SendConfig(many, sizeof(many));
+	delay(500);
+	
+  }
 
   Serial.println();
   Serial.println();
@@ -324,7 +347,12 @@ void GPS_SendConfig(const uint8_t *Progmem_ptr, uint8_t arraysize)
 
 void setup()
 {
+
+  M5.begin();
   Serial.begin(115200);
+  
+  FastLED.addLeds<SK6812, LEDS_PIN>(ledsBuff, LEDS_NUM);
+
   Serial.println();
   Serial.println();
   Serial.printf("90_UBlox_GPS_Configuration Starting %d", SILENCE_MS);
