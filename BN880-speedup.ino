@@ -229,7 +229,11 @@ void getData()
 		
 			uint8_t ok;
 			ok = Serial2.read();
-			Serial.printf("%02X ", ok);
+#if 0
+			//Serial.printf("%02X%c ", ok, ok);
+#else
+			Serial.printf("%c", ok);
+#endif
 			shortTime = millis();
 		}
 
@@ -303,24 +307,25 @@ void loop()
 
   colourBar(5, 0, 0);
   
-  Serial.print("ClearConfig ");
-  GPS_SendConfig(ClearConfig, 21);
-
   Serial.println();
   Serial.println("----------------------------------------------");
   Serial.flush();
 
   //now lets see 2 seconds of GPS characters at cleared GPS configuration
 
-  Serial.println("gps reset");
   Serial.println("show 4 seconds of 1 second reports:");
 
-  monitor(4000);  
+  monitor(5000);  
   Serial.println();
   Serial.flush();
 
   
   //now turn off most of the GPS sentences and set the refresh rate to 10hz
+
+#if 0
+  //Serial.print("ClearConfig ");
+  //GPS_SendConfig(ClearConfig, 21);
+
 
   Serial.println("GPGLLOff ");
   GPS_SendConfig(GPGLLOff, 16);
@@ -342,16 +347,19 @@ void loop()
 
   Serial.println("test");
   GPS_SendConfig(test, sizeof(test));
+#endif
 
-  Serial.print("Navrate10hz ");
-  GPS_SendConfig(Navrate10hz, sizeof(Navrate10hz));
+//  Serial.print("Navrate10hz ");
+//  GPS_SendConfig(Navrate10hz, sizeof(Navrate10hz));
 
   //Serial.print("DISABLE_ALL ");
   //GPS_SendConfig(DISABLE_ALL, sizeof(DISABLE_ALL));
 
+#if 0
   Serial.println("reset chip");
   uint8_t payload[] = { 0xFF, 0xFF, 0x02, 0x00, 00};
   makeMessage(0x06, 0x04, &payload[0], sizeof(payload));
+#endif
 
 
 #if 0
