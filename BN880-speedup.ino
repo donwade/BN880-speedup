@@ -138,6 +138,8 @@ STATE state = SILENCE;
 
 uint32_t exitTime;
 
+void GPS_SendConfig(const uint8_t *Progmem_ptr, uint8_t arraysize);
+
 //------------------------------------------------------
 
 uint16_t csum(const uint8_t *from, unsigned int N)
@@ -268,6 +270,7 @@ void monitor(unsigned waitMs)
 }
 
 //------------------------------------------------------
+// make entire LED bar one colour
 void colourBar(uint8_t R,uint8_t G, uint8_t B) 
 {
 	for (int i = 0; i < LEDS_NUM; i++) {
@@ -275,6 +278,20 @@ void colourBar(uint8_t R,uint8_t G, uint8_t B)
 	}
 	FastLED.show();
 }	
+
+// make range of LEDs one color
+void colourNleds(uint8_t who, uint8_t width, uint8_t R,uint8_t G, uint8_t B) 
+{
+	assert(who < LEDS_NUM);
+	assert(who + width < LEDS_NUM);
+	
+	for (int i = who; i < who + width; i++) {
+		ledsBuff[i].setRGB(R, G, B);
+	}
+	FastLED.show();
+}	
+
+
 
 void loop()
 {
@@ -284,6 +301,8 @@ void loop()
   Serial.println();
   Serial.flush();
 
+  colourBar(5, 0, 0);
+  
   Serial.print("ClearConfig ");
   GPS_SendConfig(ClearConfig, 21);
 
@@ -352,10 +371,34 @@ void loop()
   Serial.flush();
 
 
-  monitor(30000);
+  monitor(3000);
 
-  Serial.printf("snoozed ****\n"); delay(-1); ///////////////////////
-}
+  Serial.printf("RELAY ENGAGED *\n");
+  colourBar(0, 0, 0); // dark
+
+    while (true)
+	{
+		uint8_t c;
+		bool one;
+		bool two;
+		
+		if (Serial1.available())
+		{
+			c = Serial1.read();
+			Serial2.write(c);
+			one ? colourNleds(0, 2, 2, 2, 0) : colourNleds(0, 2, 0, 2, 2);
+			one = !one;
+		}
+
+		if (Serial2.available())
+		{
+			c= Serial2.read();
+			Serial1.write(c);
+			two ? colourNleds(3, 2, 2, 0, 2) : colourNleds(3, 2, 0, 2, 0);
+			two = !two;
+		}
+	}
+ }
 
 
 //------------------------------------------------------
