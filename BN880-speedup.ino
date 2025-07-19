@@ -151,7 +151,7 @@ uint16_t csum(const uint8_t *from, unsigned int N)
 	
 	for(I=0;I<N;I++)
 	{
-		Serial.printf("%02X ", from[I]);
+		Serial.printf(!(I%8) ? "%02X " : "%02X-", from[I]);
 		CK_A = CK_A + from[I];
 		CK_B = CK_B + CK_A;
 	}
@@ -160,6 +160,82 @@ uint16_t csum(const uint8_t *from, unsigned int N)
 	Serial.printf("CKA=%02X CKB=%02X \n", CK_A, CK_B);
 	
 	return CK_B | (CK_A << 8);
+}
+
+//------------------------------------------------------
+bool getMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize)
+{
+
+	uint32_t exit = millis() + 20; // wait 10ms for response
+	
+	uint8_t msg[4];
+	msg[0] = 0xB5;
+	msg[1] = 0x62;
+	msg[2] = ID1;
+	msg[3] = ID2;
+
+	memset(payload, 0x55, payloadSize);
+	memcpy(payload, msg, sizeof(msg));
+	
+	int i;
+
+	// look for header
+	for ( i = 0; i < sizeof(msg); i++)
+	{
+	    rescan:
+		while (!Serial2.available() && ( millis() < exit));
+		if (millis() >= exit) break;
+
+		if ( Serial2.read() != msg[i]) 
+		{
+			i = 0;  // start rescan.
+			goto rescan;
+		}
+		Serial.printf("hit 0x%X\n", msg[i]);
+	}
+
+	if ( i != sizeof(msg))
+	{
+		Serial.printf("FOAD ffffffffffffffff\n");
+		return 0;
+	}
+
+
+	// get length
+	while (!Serial2.available() && ( millis() < exit));
+	if (millis() >= exit) return 0;
+	payload[4] = Serial2.read();
+
+	while (!Serial2.available() && ( millis() < exit));
+	if (millis() >= exit) return 0;
+	payload[5] = Serial2.read();
+
+	uint16_t len = payload[5] << 8 | payload[4];
+	Serial.printf("the payload size is ... %d\n", len);
+
+
+	// copy over payload + crc (2bytes)
+	for ( i = 0; i < len + 2; i++)
+	{
+		while (!Serial2.available() && ( millis() < exit));
+		if (millis() >= exit) break;
+
+		payload[ 6 + i ] = Serial2.read();
+	}
+	
+	if ( i != len + 2) 
+	{
+		Serial.printf("payload + crc copy failed\n");
+		return 0;
+	}
+
+	Serial.printf("local CRCA=%02X CRCB=%02X\n", payload[ i+4], payload[i+5]);
+
+	//verify
+	csum( &payload[2], len + 4);
+	Serial.println();
+	
+	return 1;
 }
 
 //------------------------------------------------------
@@ -172,8 +248,12 @@ void makeMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSiz
 	msg[3] = ID2;
 	msg[4] = payloadSize & 0xFF;
 	msg[5] = payloadSize >> 8;
-	
-	memcpy(&msg[6], payload, payloadSize);
+
+	if (payloadSize)
+	{
+		assert(payload);
+		memcpy(&msg[6], payload, payloadSize);
+	}
 
 	// +4  sum across ID1,ID2, lenLo, lenHi, payload
 	uint16_t crc = csum (&msg[2], payloadSize + 4);
@@ -182,6 +262,15 @@ void makeMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSiz
 	msg[6 + payloadSize + 1] = crc & 0xFF;	
 	
 	GPS_SendConfig(msg, payloadSize + 8);
+}
+//------------------------------------------------------
+void getConfig(void) // 31.10 CFG-NAV5 (0x06 0x24)
+{
+	Serial.printf("**** %d CFG-NAV5\n", __FUNCTION__);
+	makeMessage(0x06, 0x24, NULL, 0);
+
+	uint8_t result[50];
+	getMessage(0x06, 0x24, result, sizeof(result));
 }
 //------------------------------------------------------
 
@@ -379,10 +468,12 @@ void loop()
   Serial.flush();
 
 
+  getConfig(); // 31.10 CFG-NAV5 (0x06 0x24)
   monitor(3000);
 
   Serial.printf("RELAY ENGAGED *\n");
   colourBar(0, 0, 0); // dark
+
 
     while (true)
 	{
