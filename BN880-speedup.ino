@@ -69,7 +69,7 @@ CRGB ledsBuff[LEDS_NUM];
 
 
 // 4 bytes of serial silence
- const uint32_t SILENCE_MS = 1000 * (float (8 * 4) /float(9600));
+ const uint32_t SILENCE_MS = 1000 * (float (8 * 3) /float(9600));
 
 //                                      SYNC  SYNC  CLASS ID    LNLO  LNHI  PAYLOAD ------> CHK1 CHK2                                                                     
 const PROGMEM  uint8_t ClearConfig[] = {0xB5, 0x62, 0x06, 0x09, 0x0D, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x19, 0x98};
@@ -82,11 +82,15 @@ const PROGMEM  uint8_t GPRMCOff[] =    {0xB5, 0x62, 0x06, 0x01, 0x08, 0x00, 0xF0
 
 
 // 31.17.2 Navigation/Measurement Rate Settings
-//                                      SYNC  SYNC  CLASS ID    LNLO  LNHI  PAYLOAD ------> CHK1 CHK2                                                                     
-const PROGMEM  uint8_t Navrate10hz[] = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0x64, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7A, 0x12};
-//                                                                          0x64, 0x00 = 100 (times per second)    
+//                                      SYNC  SYNC  CLASS ID      LNLO  LNHI  PAYLOAD ------> CHK1 CHK2
+const PROGMEM  uint8_t Navrate10hz[]   = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0x64, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7A, 0x12};
+//                                                                            0x64, 0x00 = 100 (times per second)    
 //                                                                                      0x01, 0x00 = 1 measurement cycle                                           
 //                                                                                                  0x01, 0x00 = 1 use GPS time 
+
+const PROGMEM  uint8_t NavrateSlowhz[] = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xFF, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7A, 0x12};
+
+
 const PROGMEM uint8_t Special[] =
 {
 	0xB5, 0x62, 0x06, 0x3E, 0x3C, 0x00, 0x00, 0x00, 0x20, 0x07, 0x00, 0x08, 0x10, 0x00, 0x01,
@@ -189,8 +193,10 @@ bool getMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize
 		if ( Serial2.read() != msg[i]) 
 		{
 			i = 0;  // start rescan.
+			//Serial.printf("rescan\n");
 			goto rescan;
 		}
+		
 		Serial.printf("hit 0x%X\n", msg[i]);
 	}
 
@@ -232,12 +238,17 @@ bool getMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize
 	Serial.printf("local CRCA=%02X CRCB=%02X\n", payload[ i+4], payload[i+5]);
 
 	//verify
-	csum( &payload[2], len + 4);
+	csum( &payload[2], len + 4); // 2=len 2=ID1+ID2
 	Serial.println();
 	
 	return 1;
 }
+//------------------------------------------------------
 
+void burnBucket(void)
+{
+	while (Serial2.available()) Serial2.read();
+}
 //------------------------------------------------------
 void makeMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize)
 {
@@ -272,6 +283,28 @@ void getConfig(void) // 31.10 CFG-NAV5 (0x06 0x24)
 	uint8_t result[50];
 	getMessage(0x06, 0x24, result, sizeof(result));
 }
+//------------------------------------------------------
+void getNEMA(void) // 31.12 CFG-NMEA (0x06 0x17)
+{
+	Serial.printf("**** %d CFG-NMEA\n", __FUNCTION__);
+	makeMessage(0x06, 0x17, NULL, 0);
+
+	uint8_t result[50];
+	getMessage(0x06, 0x17, result, sizeof(result));
+}
+
+//------------------------------------------------------
+void getUART(void) // 31.16.2 Polls the configuration for one I/O Port
+{
+	Serial.printf("**** %d CFG-UART\n", __FUNCTION__);
+	
+	uint8_t portID[] = {1}; // 1=UART 3=USB 4=SPI
+	makeMessage(0x06, 0x0, portID, sizeof(portID));
+
+	uint8_t result[50];
+	getMessage(0x06, 0x0, result, sizeof(result));
+}
+
 //------------------------------------------------------
 
 void wait4Silence()
@@ -402,7 +435,19 @@ void loop()
 
   //now lets see 2 seconds of GPS characters at cleared GPS configuration
 
-  Serial.println("show 4 seconds of 1 second reports:");
+  Serial.println("show X seconds of 1 second reports:");
+
+  //GPS_SendConfig(NavrateSlowhz, sizeof(NavrateSlowhz));
+
+  Serial.print("DISABLE_ALL ");
+  GPS_SendConfig(DISABLE_ALL, sizeof(DISABLE_ALL));
+
+
+  getConfig(); // 31.10 CFG-NAV5 (0x06 0x24)
+  getNEMA();   // 31.12 CFG-NMEA (0x06 0x17)
+  //getUART();   // 31.16.2 Polls the configuration for one I/O Port
+
+
 
   monitor(5000);  
   Serial.println();
@@ -438,12 +483,6 @@ void loop()
   GPS_SendConfig(test, sizeof(test));
 #endif
 
-//  Serial.print("Navrate10hz ");
-//  GPS_SendConfig(Navrate10hz, sizeof(Navrate10hz));
-
-  //Serial.print("DISABLE_ALL ");
-  //GPS_SendConfig(DISABLE_ALL, sizeof(DISABLE_ALL));
-
 #if 0
   Serial.println("reset chip");
   uint8_t payload[] = { 0xFF, 0xFF, 0x02, 0x00, 00};
@@ -469,6 +508,12 @@ void loop()
 
 
   getConfig(); // 31.10 CFG-NAV5 (0x06 0x24)
+  getNEMA();   // 31.12 CFG-NMEA (0x06 0x17)
+  getUART();   // 31.16.2 Polls the configuration for one I/O Port
+
+  //Serial.print("Navrate10hz ");
+  //GPS_SendConfig(Navrate10hz, sizeof(Navrate10hz));
+
   monitor(3000);
 
   Serial.printf("RELAY ENGAGED *\n");
@@ -536,9 +581,10 @@ void GPS_SendConfig(const uint8_t *Progmem_ptr, uint8_t arraysize)
 	{
 		byteread = *Progmem_ptr++;
 		Serial2.write(byteread);
-		delay(1);
 	}
 
+	burnBucket();
+	
 	delay(100);
 	csum( &restore[2],arraysize - 4); // payload size only
 	Serial.println();
