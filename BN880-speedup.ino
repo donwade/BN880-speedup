@@ -67,6 +67,8 @@ Timing Messages: Timepulse Output, Timemark Results
 #define LEDS_NUM 10
 CRGB ledsBuff[LEDS_NUM];
 
+// given a message packet, where is the payload?
+#define OFFSET2_PAYLOAD 6
 
 // 4 bytes of serial silence
  const uint32_t SILENCE_MS = 1000 * (float (8 * 3) /float(9600));
@@ -113,29 +115,36 @@ const PROGMEM uint8_t many[] =
 	0x00, 0x00, 0x00, 0x05, 0x01, 0x06, 0x08, 0x0C, 0x00, 0x01, 0x00, 0x01, 0x01, 0x21, 0xDE
 };
 
-const uint8_t DISABLE_ALL[] =
+//----------------------------------------------
+typedef struct 
 {
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x0A, 0x00, 0x04, 0x23,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x09, 0x00, 0x03, 0x21,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x00, 0x00, 0xFA, 0x0F,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x01, 0x00, 0xFB, 0x11,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x0D, 0x00, 0x07, 0x29,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x06, 0x00, 0x00, 0x1B,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x02, 0x00, 0xFC, 0x13,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x07, 0x00, 0x01, 0x1D,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x03, 0x00, 0xFD, 0x15,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x0F, 0x00, 0x09, 0x2D,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x04, 0x00, 0xFE, 0x17,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x05, 0x00, 0xFF, 0x19,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x08, 0x00, 0x02, 0x1F,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x00, 0x00, 0xFB, 0x12,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x01, 0x00, 0xFC, 0x14,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x03, 0x00, 0xFE, 0x18,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x04, 0x00, 0xFF, 0x1A,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x05, 0x00, 0x00, 0x1C,
-	0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x06, 0x00, 0x01, 0x1E
+	uint8_t foo[11];	
+} DISABLE_ITEM;
+
+const DISABLE_ITEM DISABLE_ALL[] =
+{
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x0A, 0x00, 0x04, 0x23 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x09, 0x00, 0x03, 0x21 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x00, 0x00, 0xFA, 0x0F },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x01, 0x00, 0xFB, 0x11 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x0D, 0x00, 0x07, 0x29 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x06, 0x00, 0x00, 0x1B },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x02, 0x00, 0xFC, 0x13 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x07, 0x00, 0x01, 0x1D },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x03, 0x00, 0xFD, 0x15 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x0F, 0x00, 0x09, 0x2D },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x04, 0x00, 0xFE, 0x17 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x05, 0x00, 0xFF, 0x19 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF0, 0x08, 0x00, 0x02, 0x1F },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x00, 0x00, 0xFB, 0x12 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x01, 0x00, 0xFC, 0x14 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x03, 0x00, 0xFE, 0x18 },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x04, 0x00, 0xFF, 0x1A },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x05, 0x00, 0x00, 0x1C },
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00, 0xF1, 0x06, 0x00, 0x01, 0x1E }
 
 };
+//----------------------------------------------
 
 typedef enum { SILENCE, COLLECT, WAIT4_FIRST_CHAR} STATE;
 STATE state = SILENCE;
@@ -146,63 +155,91 @@ void GPS_SendConfig(const uint8_t *Progmem_ptr, uint8_t arraysize);
 
 //------------------------------------------------------
 
-uint16_t csum(const uint8_t *from, unsigned int N)
+uint16_t calc_csum(const uint8_t *from, unsigned int N)
 {
 	uint8_t CK_A = 0, CK_B = 0;
 	int I;
 
-	Serial.print("CSUM = ");
+	//Serial.print("CSUM = ");
 	
 	for(I=0;I<N;I++)
 	{
-		Serial.printf(!(I%8) ? "%02X " : "%02X-", from[I]);
+		//Serial.printf(!(I%8) ? "%02X " : "%02X-", from[I]);
 		CK_A = CK_A + from[I];
 		CK_B = CK_B + CK_A;
 	}
-	Serial.println();
 	
-	Serial.printf("CKA=%02X CKB=%02X \n", CK_A, CK_B);
+	Serial.printf("calc_csum: CKA=%02X CKB=%02X \n", CK_A, CK_B);
 	
 	return CK_B | (CK_A << 8);
 }
 
 //------------------------------------------------------
-bool getMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize)
+void dumpPayload(uint8_t *from, uint32_t len)
+{
+	Serial.println("dump payload");
+	for (int i = 0; i < len; i++)
+	{
+		printf("[%02d] 0x%02x \n", i, from[i]);		
+	}
+}
+//------------------------------------------------------
+void dumpPacket(const uint8_t *from, uint32_t len)
+{
+	Serial.println("dump packet");
+	for (int i = 0; i < len; i++)
+	{
+		if(i == OFFSET2_PAYLOAD) Serial.println(); 	//payload
+		if(i == 4 ) Serial.println(); 				// len
+		if(i == len - 2 ) Serial.println(); 		// crc
+		if(i >= OFFSET2_PAYLOAD && i < len -2)
+			printf("      [%02d] 0x%02x \n", i - OFFSET2_PAYLOAD, from[i]);
+		else
+			printf("  [%02d] 0x%02x \n", i, from[i]);
+			
+	}
+	Serial.println();
+}
+//------------------------------------------------------
+
+// return size of PAYLOAD if valid
+
+uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSize)
 {
 
-	uint32_t exit = millis() + 20; // wait 10ms for response
+	uint32_t exit = millis() + 200; // wait 10ms for response
 	
-	uint8_t msg[4];
-	msg[0] = 0xB5;
-	msg[1] = 0x62;
-	msg[2] = ID1;
-	msg[3] = ID2;
+	uint8_t preamble[4];
+	preamble[0] = 0xB5;
+	preamble[1] = 0x62;
+	preamble[2] = ID1;
+	preamble[3] = ID2;
 
-	memset(payload, 0x55, payloadSize);
-	memcpy(payload, msg, sizeof(msg));
+	memset(packet, 0x55, packetSize);
+	memcpy(packet, preamble, sizeof(preamble));
 	
 	int i;
 
 	// look for header
-	for ( i = 0; i < sizeof(msg); i++)
+	for ( i = 0; i < sizeof(preamble); i++)
 	{
 	    rescan:
 		while (!Serial2.available() && ( millis() < exit));
 		if (millis() >= exit) break;
 
-		if ( Serial2.read() != msg[i]) 
+		if ( Serial2.read() != preamble[i]) 
 		{
 			i = 0;  // start rescan.
 			//Serial.printf("rescan\n");
 			goto rescan;
 		}
 		
-		Serial.printf("hit 0x%X\n", msg[i]);
+		Serial.printf("rx = 0x%X\n", preamble[i]);
 	}
 
-	if ( i != sizeof(msg))
+	if ( i != sizeof(preamble))
 	{
-		Serial.printf("FOAD ffffffffffffffff\n");
+		Serial.printf("%s fail. exit early\n", __FUNCTION__);
 		return 0;
 	}
 
@@ -210,38 +247,41 @@ bool getMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize
 	// get length
 	while (!Serial2.available() && ( millis() < exit));
 	if (millis() >= exit) return 0;
-	payload[4] = Serial2.read();
+	packet[4] = Serial2.read();
+	Serial.printf("lnL = 0x%X\n", packet[4]);
 
 	while (!Serial2.available() && ( millis() < exit));
 	if (millis() >= exit) return 0;
-	payload[5] = Serial2.read();
+	packet[5] = Serial2.read();
+	Serial.printf("lnH = 0x%X\n", packet[5]);
 
-	uint16_t len = payload[5] << 8 | payload[4];
-	Serial.printf("the payload size is ... %d\n", len);
+	uint16_t payload_len = packet[5] << 8 | packet[4];
+	Serial.printf("the packet size is ... %d\n", payload_len);
 
 
-	// copy over payload + crc (2bytes)
-	for ( i = 0; i < len + 2; i++)
+	// copy over packet + crc (2bytes)
+	for ( i = 0; i < payload_len + 2; i++)
 	{
 		while (!Serial2.available() && ( millis() < exit));
 		if (millis() >= exit) break;
 
-		payload[ 6 + i ] = Serial2.read();
+		packet[ OFFSET2_PAYLOAD + i ] = Serial2.read();
 	}
-	
-	if ( i != len + 2) 
+
+	if ( i != payload_len + 2)  
 	{
-		Serial.printf("payload + crc copy failed\n");
+		Serial.printf("packet + crc copy failed\n");
 		return 0;
 	}
 
-	Serial.printf("local CRCA=%02X CRCB=%02X\n", payload[ i+4], payload[i+5]);
+	dumpPacket(packet, payload_len + 8);
+
+	Serial.printf("local CRCA=%02X CRCB=%02X\n", packet[ i+4], packet[i+5]);
 
 	//verify
-	csum( &payload[2], len + 4); // 2=len 2=ID1+ID2
-	Serial.println();
+	calc_csum( &packet[2], payload_len + 4); // 2len+2ID1ID2=4
 	
-	return 1;
+	return payload_len;
 }
 //------------------------------------------------------
 
@@ -250,7 +290,7 @@ void burnBucket(void)
 	while (Serial2.available()) Serial2.read();
 }
 //------------------------------------------------------
-void makeMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize)
+void makeMessage(char *explain, uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSize)
 {
 	uint8_t *msg = (uint8_t *) alloca ( payloadSize + 8);
 	msg[0] = 0xB5;
@@ -267,18 +307,18 @@ void makeMessage(uint8_t ID1, uint8_t ID2, uint8_t *payload, uint16_t payloadSiz
 	}
 
 	// +4  sum across ID1,ID2, lenLo, lenHi, payload
-	uint16_t crc = csum (&msg[2], payloadSize + 4);
+	uint16_t crc = calc_csum (&msg[2], payloadSize + 4);
 	
-	msg[6 + payloadSize + 0] = crc >> 8;	
-	msg[6 + payloadSize + 1] = crc & 0xFF;	
-	
-	GPS_SendConfig(msg, payloadSize + 8);
+	msg[OFFSET2_PAYLOAD + payloadSize + 0] = crc >> 8;	
+	msg[OFFSET2_PAYLOAD + payloadSize + 1] = crc & 0xFF;	
+
+	// packet size is header+OPCMD+len +payload +crc = 8 + payload
+	SendPacket(explain, msg, payloadSize + 8);
 }
 //------------------------------------------------------
 void getConfig(void) // 31.10 CFG-NAV5 (0x06 0x24)
 {
-	Serial.printf("**** %d CFG-NAV5\n", __FUNCTION__);
-	makeMessage(0x06, 0x24, NULL, 0);
+	makeMessage("31.10 CFG-NAV5", 0x06, 0x24, NULL, 0);
 
 	uint8_t result[50];
 	getMessage(0x06, 0x24, result, sizeof(result));
@@ -286,23 +326,47 @@ void getConfig(void) // 31.10 CFG-NAV5 (0x06 0x24)
 //------------------------------------------------------
 void getNEMA(void) // 31.12 CFG-NMEA (0x06 0x17)
 {
-	Serial.printf("**** %d CFG-NMEA\n", __FUNCTION__);
-	makeMessage(0x06, 0x17, NULL, 0);
+	makeMessage("31.12 CFG-NMEA",0x06, 0x17, NULL, 0);
 
 	uint8_t result[50];
 	getMessage(0x06, 0x17, result, sizeof(result));
 }
 
 //------------------------------------------------------
-void getUART(void) // 31.16.2 Polls the configuration for one I/O Port
+void getSetUart(uint32_t baudrate = 0) // 31.16.2 Polls the configuration for one I/O Port
 {
-	Serial.printf("**** %d CFG-UART\n", __FUNCTION__);
-	
-	uint8_t portID[] = {1}; // 1=UART 3=USB 4=SPI
-	makeMessage(0x06, 0x0, portID, sizeof(portID));
 
-	uint8_t result[50];
-	getMessage(0x06, 0x0, result, sizeof(result));
+again:
+	uint8_t portID[] = {1}; // 1=UART 3=USB 4=SPI
+	makeMessage("31.16.2 CFG-UART", 0x06, 0x0, portID, sizeof(portID));
+
+	uint8_t aPacket[50];
+	
+	uint8_t payload_len = getMessage(0x06, 0x0, aPacket, sizeof(aPacket));
+	if (!payload_len)
+	{
+		Serial.printf("%s: expected mandatory response. None found\n", __FUNCTION__);
+		Serial.printf("h/w could already be at 115200, retrying cmd at 115200 baud\n");
+		Serial2.begin(115200);
+		goto again;
+	}
+
+	
+	// good thing its a little endian message order
+	uint32_t *baud = (uint32_t *) &aPacket[OFFSET2_PAYLOAD + 8];
+
+	Serial.printf("detected gps baud rate is %d\n", *baud);
+
+	if (!baudrate) return;
+
+	*baud = baudrate;
+	Serial.printf("dump after change\n");
+	
+	dumpPacket(aPacket, payload_len + 8);
+
+	SendPacket("31.16.2 CFG-UART (set)", aPacket, payload_len + 2 + 2 + 2 + 2);
+	getSetUart(0); // did it stick?
+	
 }
 
 //------------------------------------------------------
@@ -437,15 +501,18 @@ void loop()
 
   Serial.println("show X seconds of 1 second reports:");
 
-  //GPS_SendConfig(NavrateSlowhz, sizeof(NavrateSlowhz));
+  SendPacket("ClearConfig", ClearConfig, sizeof(ClearConfig));
 
-  Serial.print("DISABLE_ALL ");
-  GPS_SendConfig(DISABLE_ALL, sizeof(DISABLE_ALL));
-
-
+  for (int i = 0; i < sizeof(DISABLE_ALL)/sizeof(DISABLE_ITEM); i++)
+  {
+  	char who[30];
+	sprintf(who, "DISABLE #%d", i);
+  	SendPacket(who,DISABLE_ALL[i].foo, sizeof(DISABLE_ITEM));
+  }
+	
   getConfig(); // 31.10 CFG-NAV5 (0x06 0x24)
   getNEMA();   // 31.12 CFG-NMEA (0x06 0x17)
-  //getUART();   // 31.16.2 Polls the configuration for one I/O Port
+  //getSetUart();   // 31.16.2 Polls the configuration for one I/O Port
 
 
 
@@ -458,29 +525,29 @@ void loop()
 
 #if 0
   //Serial.print("ClearConfig ");
-  //GPS_SendConfig(ClearConfig, 21);
+  //SendPacket(ClearConfig, 21);
 
 
   Serial.println("GPGLLOff ");
-  GPS_SendConfig(GPGLLOff, 16);
+  SendPacket(GPGLLOff, 16);
 
   Serial.println("GPGSVOff ");
-  GPS_SendConfig(GPGSVOff, 16);
+  SendPacket(GPGSVOff, 16);
 
   Serial.println("GPVTGOff ");
-  GPS_SendConfig(GPVTGOff, 16);
+  SendPacket(GPVTGOff, 16);
 
   Serial.println("GPGSAOff ");
-  GPS_SendConfig(GPGSAOff, 16);
+  SendPacket(GPGSAOff, 16);
 
   Serial.println("Navrate10hz ");
-  GPS_SendConfig(Navrate10hz, 14);
+  SendPacket(Navrate10hz, 14);
 
   Serial.println("Special ");
-  GPS_SendConfig(Special, sizeof(Special));
+  SendPacket(Special, sizeof(Special));
 
   Serial.println("test");
-  GPS_SendConfig(test, sizeof(test));
+  SendPacket(test, sizeof(test));
 #endif
 
 #if 0
@@ -496,7 +563,7 @@ void loop()
   	bool flip;
 	flip ? colourBar(10,0,0) : colourBar(0, 0, 10);
 	flip = !flip;
-  	GPS_SendConfig(many, sizeof(many));
+  	SendPacket(many, sizeof(many));
 	delay(500);
 	
   }
@@ -509,10 +576,9 @@ void loop()
 
   getConfig(); // 31.10 CFG-NAV5 (0x06 0x24)
   getNEMA();   // 31.12 CFG-NMEA (0x06 0x17)
-  getUART();   // 31.16.2 Polls the configuration for one I/O Port
 
   //Serial.print("Navrate10hz ");
-  //GPS_SendConfig(Navrate10hz, sizeof(Navrate10hz));
+  //SendPacket(Navrate10hz, sizeof(Navrate10hz));
 
   monitor(3000);
 
@@ -547,25 +613,25 @@ void loop()
 
 //------------------------------------------------------
 
-
-void GPS_SendConfig(const uint8_t *Progmem_ptr, uint8_t arraysize)
+void SendPacket(char *explain, const uint8_t *pPacket, uint8_t packetSize)
 {
 	uint8_t byteread, index;
-	const uint8_t *restore = Progmem_ptr;
+	const uint8_t *restore = pPacket;
 
-	Serial.print(F("GPSSend  "));
-	Serial.printf("\nSync1=%02X Sync2=%02X Class=%02X ID=%02X LEN=%d\n",
-	  Progmem_ptr[0], // sync1
-	  Progmem_ptr[1], // sync2
-	  Progmem_ptr[2], // class
-	  Progmem_ptr[3], // id1
-	  Progmem_ptr[4] | Progmem_ptr[5] << 8
+	Serial.printf("----------------------\n%s\nSync1=%02X Sync2=%02X Class=%02X ID=%02X LEN=%d\n",
+	  explain,
+	  pPacket[0], // sync1
+	  pPacket[1], // sync2
+	  pPacket[2], // class
+	  pPacket[3], // id1
+	  pPacket[4] | pPacket[5] << 8
 	  );
 
-
-	for (index = 0; index < arraysize; index++)
+	dumpPacket(pPacket,packetSize);
+#if 0
+	for (index = 0; index < packetSize; index++)
 	{
-		byteread = *Progmem_ptr++;
+		byteread = *pPacket++;
 		if (byteread < 0x10)
 		{
 		  Serial.print(F("0"));
@@ -573,23 +639,56 @@ void GPS_SendConfig(const uint8_t *Progmem_ptr, uint8_t arraysize)
 		Serial.print(byteread, HEX);
 		Serial.print(F(" "));
 	}
+#endif
+
 	Serial.println();
-
-	Progmem_ptr = restore;
-
-	for (index = 0; index < arraysize; index++)
-	{
-		byteread = *Progmem_ptr++;
-		Serial2.write(byteread);
-	}
 
 	burnBucket();
+
+retry:
+	pPacket = restore;
+
+	for (index = 0; index < packetSize; index++)
+	{
+		byteread = *pPacket++;
+		Serial2.write(byteread);
+		delay(1);
+	}
+
+	delay(10);
+	pPacket = restore;
+
+	// csum sits as the last 2 bytes of the supplied packet
+	Serial.printf("csum passed in %02X %02X\n", 
+		pPacket[packetSize -2 ], 
+		pPacket[packetSize -1 ]);
 	
-	delay(100);
-	csum( &restore[2],arraysize - 4); // payload size only
-	Serial.println();
+	uint16_t usr_sum = (pPacket[packetSize -2 ] << 8) | (pPacket[packetSize -1]);
 	
+	// recalc the checksum. this could be a RMW type buffer.
 	
+	uint16_t c_sum = calc_csum( &restore[2],packetSize - 4); // payload size only
+	
+	Serial.printf("calc recalc is %02X %02X\n", c_sum >> 8, c_sum & 0xFF);
+
+
+	// see if someone did a RMW on PAYLOAD area of the supplied user buffer.
+	// If so, regen the checksum and send that instead.
+	// It will require a copy as user input is a const pointer.
+	
+	if (usr_sum != c_sum)
+	{
+		Serial.printf ("*** csum diff 0x%04X vs 0x%04X ****\n", usr_sum, c_sum);
+		delay(10000);
+		
+		uint8_t clone[packetSize];
+		memcpy(clone, pPacket, packetSize);
+		
+		clone[packetSize -2 ] = c_sum >> 8; 
+		clone[packetSize -1 ] = c_sum & 0xFF;
+		SendPacket("adjusted CSUM", clone, packetSize);
+		delay(10000);		
+	}
 }
 
 
@@ -607,5 +706,18 @@ void setup()
   delay(10000);
   Serial.println();
   Serial.println();
+
+
+  /*
+     the gps chip could be still on 9600.
+     tell it to move to 115200
+     if it's already sitting no 11500, this 9600
+     will be garbage and thus rejected.
+  */
+  
   Serial2.begin(9600);
+  getSetUart(115200); // 31.16.2 Polls and set the configuration for one I/O Port
+
+  // fine. The gps chip was already at 115200 or moved to it.
+  Serial2.begin(115200);
 }
