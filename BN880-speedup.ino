@@ -63,6 +63,9 @@ Timing Messages: Timepulse Output, Timemark Results
 #include <M5Unified.h>
 #include <FastLED.h>                                                                                                                                                                    
 
+void SendPacket(char *explain, const uint8_t *pPacket, uint8_t packetSize, bool bDumpMsg = false);
+uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSize, bool bDumpPacket = false);
+
 #define LEDS_PIN 25
 #define LEDS_NUM 10
 CRGB ledsBuff[LEDS_NUM];
@@ -160,8 +163,6 @@ uint16_t calc_csum(const uint8_t *from, unsigned int N)
 	uint8_t CK_A = 0, CK_B = 0;
 	int I;
 
-	//Serial.print("CSUM = ");
-	
 	for(I=0;I<N;I++)
 	{
 		//Serial.printf(!(I%8) ? "%02X " : "%02X-", from[I]);
@@ -169,7 +170,7 @@ uint16_t calc_csum(const uint8_t *from, unsigned int N)
 		CK_B = CK_B + CK_A;
 	}
 	
-	Serial.printf("calc_csum: CKA=%02X CKB=%02X \n", CK_A, CK_B);
+	//Serial.printf("calc_csum: CKA=%02X CKB=%02X \n", CK_A, CK_B);
 	
 	return CK_B | (CK_A << 8);
 }
@@ -204,7 +205,7 @@ void dumpPacket(const uint8_t *from, uint32_t len)
 
 // return size of PAYLOAD if valid
 
-uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSize)
+uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSize, bool bDumpPacket)
 {
 
 	uint32_t exit = millis() + 200; // wait 10ms for response
@@ -233,8 +234,8 @@ uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSiz
 			//Serial.printf("rescan\n");
 			goto rescan;
 		}
-		
-		Serial.printf("rx = 0x%X\n", preamble[i]);
+		// missed. what was the char?
+		//Serial.printf("rx = 0x%X\n", preamble[i]);
 	}
 
 	if ( i != sizeof(preamble))
@@ -248,12 +249,14 @@ uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSiz
 	while (!Serial2.available() && ( millis() < exit));
 	if (millis() >= exit) return 0;
 	packet[4] = Serial2.read();
-	Serial.printf("lnL = 0x%X\n", packet[4]);
+	
+	//Serial.printf("lnL = 0x%X\n", packet[4]);
 
 	while (!Serial2.available() && ( millis() < exit));
 	if (millis() >= exit) return 0;
 	packet[5] = Serial2.read();
-	Serial.printf("lnH = 0x%X\n", packet[5]);
+	
+	//Serial.printf("lnH = 0x%X\n", packet[5]);
 
 	uint16_t payload_len = packet[5] << 8 | packet[4];
 	Serial.printf("the packet size is ... %d\n", payload_len);
@@ -274,9 +277,9 @@ uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSiz
 		return 0;
 	}
 
-	dumpPacket(packet, payload_len + 8);
+	if (bDumpPacket) dumpPacket(packet, payload_len + 8);
 
-	Serial.printf("local CRCA=%02X CRCB=%02X\n", packet[ i+4], packet[i+5]);
+	//Serial.printf("local CRCA=%02X CRCB=%02X\n", packet[ i+4], packet[i+5]);
 
 	//verify
 	calc_csum( &packet[2], payload_len + 4); // 2len+2ID1ID2=4
@@ -285,7 +288,7 @@ uint8_t getMessage(uint8_t ID1, uint8_t ID2, uint8_t *packet, uint16_t packetSiz
 }
 //------------------------------------------------------
 
-void burnBucket(void)
+void burnRxBuffers(void)
 {
 	while (Serial2.available()) Serial2.read();
 }
@@ -335,36 +338,47 @@ void getNEMA(void) // 31.12 CFG-NMEA (0x06 0x17)
 //------------------------------------------------------
 void getSetUart(uint32_t baudrate = 0) // 31.16.2 Polls the configuration for one I/O Port
 {
+	uint8_t aPacket[50];
 
 again:
 	uint8_t portID[] = {1}; // 1=UART 3=USB 4=SPI
-	makeMessage("31.16.2 CFG-UART", 0x06, 0x0, portID, sizeof(portID));
+	makeMessage("31.16.2 CFG-UART (get baud)", 0x06, 0x0, portID, sizeof(portID));
 
-	uint8_t aPacket[50];
-	
+	// ask h/w for current baudrate.
 	uint8_t payload_len = getMessage(0x06, 0x0, aPacket, sizeof(aPacket));
+	
 	if (!payload_len)
 	{
-		Serial.printf("%s: expected mandatory response. None found\n", __FUNCTION__);
+		// 2) we could be talking at 9600 but h/w alread up at 115200
+		//	  therefore we would get not repsonse it this scenario.
+		//	  Change arduino to 115200 and ask for baud rate again
+		
+		Serial.printf("%s: timeout occurred\n", __FUNCTION__);
 		Serial.printf("h/w could already be at 115200, retrying cmd at 115200 baud\n");
 		Serial2.begin(115200);
 		goto again;
 	}
 
-	
-	// good thing its a little endian message order
+	// got a response. 
+	// we could be 9600 or 115200 on both ends.
+	// Don't care. ALWAYS issue a 115200 config request.
+
+	// baud rate is 8 bytes into the payload
 	uint32_t *baud = (uint32_t *) &aPacket[OFFSET2_PAYLOAD + 8];
+	
+	Serial.printf("gps baud rate (h/w) is %d\n", *baud);
 
-	Serial.printf("detected gps baud rate is %d\n", *baud);
+	if (!baudrate) return;  // 0 = query only
 
-	if (!baudrate) return;
+	// config for 115200
+	// good thing its a little endian message order
 
 	*baud = baudrate;
-	Serial.printf("dump after change\n");
 	
-	dumpPacket(aPacket, payload_len + 8);
+	//Serial.printf("dump after change\n");
+	//dumpPacket(aPacket, payload_len + 8);
 
-	SendPacket("31.16.2 CFG-UART (set)", aPacket, payload_len + 2 + 2 + 2 + 2);
+	SendPacket("31.16.2 CFG-UART (set to 115200)", aPacket, payload_len + 2 + 2 + 2 + 2);
 	getSetUart(0); // did it stick?
 	
 }
@@ -612,8 +626,13 @@ void loop()
 
 
 //------------------------------------------------------
+// user can provide a packet message that has a bad crc value.
+// This can occur when a RMW operation on the packet has occured
+// and the user shouldn't have to know about crc stuff.
+//
+// The crc will be corrected as needed.
 
-void SendPacket(char *explain, const uint8_t *pPacket, uint8_t packetSize)
+void SendPacket(char *explain, const uint8_t *pPacket, uint8_t packetSize, bool bDumpMsg)
 {
 	uint8_t byteread, index;
 	const uint8_t *restore = pPacket;
@@ -627,7 +646,7 @@ void SendPacket(char *explain, const uint8_t *pPacket, uint8_t packetSize)
 	  pPacket[4] | pPacket[5] << 8
 	  );
 
-	dumpPacket(pPacket,packetSize);
+	if (bDumpMsg) dumpPacket(pPacket,packetSize);
 #if 0
 	for (index = 0; index < packetSize; index++)
 	{
@@ -643,7 +662,7 @@ void SendPacket(char *explain, const uint8_t *pPacket, uint8_t packetSize)
 
 	Serial.println();
 
-	burnBucket();
+	burnRxBuffers();
 
 retry:
 	pPacket = restore;
@@ -659,9 +678,8 @@ retry:
 	pPacket = restore;
 
 	// csum sits as the last 2 bytes of the supplied packet
-	Serial.printf("csum passed in %02X %02X\n", 
-		pPacket[packetSize -2 ], 
-		pPacket[packetSize -1 ]);
+	
+	if (bDumpMsg) Serial.printf("csum passed in %02X %02X\n", pPacket[packetSize -2 ], pPacket[packetSize -1 ]);
 	
 	uint16_t usr_sum = (pPacket[packetSize -2 ] << 8) | (pPacket[packetSize -1]);
 	
@@ -669,17 +687,11 @@ retry:
 	
 	uint16_t c_sum = calc_csum( &restore[2],packetSize - 4); // payload size only
 	
-	Serial.printf("calc recalc is %02X %02X\n", c_sum >> 8, c_sum & 0xFF);
+	if (bDumpMsg) Serial.printf("calc recalc is %02X %02X\n", c_sum >> 8, c_sum & 0xFF);
 
-
-	// see if someone did a RMW on PAYLOAD area of the supplied user buffer.
-	// If so, regen the checksum and send that instead.
-	// It will require a copy as user input is a const pointer.
-	
 	if (usr_sum != c_sum)
 	{
-		Serial.printf ("*** csum diff 0x%04X vs 0x%04X ****\n", usr_sum, c_sum);
-		delay(10000);
+		Serial.printf ("%s correcting csum (0x%04X vs 0x%04X) ------\n", __FUNCTION__, usr_sum, c_sum);
 		
 		uint8_t clone[packetSize];
 		memcpy(clone, pPacket, packetSize);
@@ -687,7 +699,6 @@ retry:
 		clone[packetSize -2 ] = c_sum >> 8; 
 		clone[packetSize -1 ] = c_sum & 0xFF;
 		SendPacket("adjusted CSUM", clone, packetSize);
-		delay(10000);		
 	}
 }
 
