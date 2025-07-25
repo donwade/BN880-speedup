@@ -78,6 +78,7 @@ CRGB ledsBuff[LEDS_NUM];
 
 //                                      SYNC  SYNC  CLASS ID    LNLO  LNHI  PAYLOAD ------> CHK1 CHK2                                                                     
 const PROGMEM  uint8_t ClearConfig[] = {0xB5, 0x62, 0x06, 0x09, 0x0D, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x19, 0x98};
+
 const PROGMEM  uint8_t GPGLLOff[] =    {0xB5, 0x62, 0x06, 0x01, 0x08, 0x00, 0xF0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x2B};
 const PROGMEM  uint8_t GPGSVOff[] =    {0xB5, 0x62, 0x06, 0x01, 0x08, 0x00, 0xF0, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x39};
 const PROGMEM  uint8_t GPVTGOff[] =    {0xB5, 0x62, 0x06, 0x01, 0x08, 0x00, 0xF0, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x05, 0x47};
@@ -101,9 +102,6 @@ const PROGMEM  uint8_t Navrate10hz[]   = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0x
 //                                                                            0x64, 0x00 = 100 (times per second)    
 //                                                                                      0x01, 0x00 = 1 measurement cycle                                           
 //                                                                                                  0x01, 0x00 = 1 use GPS time 
-
-const PROGMEM  uint8_t NavrateSlowhz[] = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xFF, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7A, 0x12};
-
 
 const PROGMEM uint8_t Special[] =
 {
@@ -189,12 +187,15 @@ const char *findConfigMsg (uint8_t aclass, uint8_t id)
 
 typedef struct 
 {
-	uint8_t foo[11];	
-} DISABLE_ITEM;
+	uint8_t cmd_string[11];	
+} CONFIGURE_ITEM;
 
-const DISABLE_ITEM DISABLE_LIST[] =
+const CONFIGURE_ITEM CONFIGURE_LIST[] =
 {
-//                                          |<--area-->     TICKS     
+
+//  start with a bunch of disables to put in a known state
+//  disable by having the scalar = 0
+//                                          |<--area-->    SCALAR     CRCH  CHRL    
 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x0A,    0x00,     0x04, 0x23 },
 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x09,    0x00,     0x03, 0x21 },
 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x00,    0x00,     0xFA, 0x0F },
@@ -215,13 +216,47 @@ const DISABLE_ITEM DISABLE_LIST[] =
 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF1, 0x05,    0x00,     0x00, 0x1C },
 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF1, 0x06,    0x00,     0x01, 0x1E },
 
+// time for the 'enables'
 
-// report rate is "TICKS" times 'Navrate10hz[]' setting
-// 'my changes area'
-//											|<--area--> 	TICKS	 
-	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x01,    0x01,     0xFB, 0x11 },
-	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF1, 0x06,    0x01,     0x01, 0x1E },
-	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x03,    0x01,     0xFD, 0x15 },
+// report rate for each area is "SCALED" by 
+//		what is set in 'Navrate10hz[]' setting
+
+//  VALUES IN THE 'area' section.
+//  if it starts with F0 = classic NEMA control
+//  it it starts with F1 = new age UBX  control
+
+// caution commands my vary in format based upon the length
+// in particular, cmd 06-01 has 3 different allowed lengths
+// each lenght has differing formats in the payload (sigh)
+
+//               |<--cmd-->|  |<--len-->|	|<--area--> 	SCALAR	 
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x01,    0x10,     0xFB, 0x11 },
+
+	// GNRMC 20.10 RMC (notice F0)
+	//	$GPRMC,hhmmss,status,latitude,N,longitude,E,spd,cog,ddmmyy,mv,mvE,mode*cs<CR><LF>
+	// 	Example:
+	//	$GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A*57
+	
+ 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x04,    0x01,     0xFD, 0x15 },
+
+	// GNGSV 20.9 GSV satellites in view.
+	// $GPGSV,NoMsg,MsgNo,NoSv,{,sv,elv,az,cno}*cs
+	//Example:
+	//	$GPGSV,3,1,10,23,38,230,44,29,71,156,47,07,29,116,41,08,09,081,36*7F
+	//	$GPGSV,3,2,10,10,07,189,,05,05,220,,09,34,274,42,18,25,309,44*72
+	//	$GPGSV,3,3,10,26,82,187,47,28,43,056,46*77
+
+	// this is a multi message response
+	// NoMsg = expect M number of messages to follow.
+	// MsgNo = message N of M messages
+ 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x03,    100,     0xFD, 0x15 },
+
+
+	// date and time
+	// $GPZDA,hhmmss.ss,day,month,year,ltzh,ltzn*cs
+	// Example:
+	//		$GPZDA,082710.00,16,09,2002,00,00*64
+	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,	 0xF0, 0x08,	100,	 0xFD, 0x15 },
 
 };
 //----------------------------------------------
@@ -594,15 +629,15 @@ void loop()
 
   SendPacket("ClearConfig", ClearConfig, sizeof(ClearConfig));
 
-  for (int i = 0; i < sizeof(DISABLE_LIST)/sizeof(DISABLE_ITEM); i++)
+  for (int i = 0; i < sizeof(CONFIGURE_LIST)/sizeof(CONFIGURE_ITEM); i++)
   {
   	char who[30];
 	const char *what;
 	sprintf(who, "DISABLE #%d", i);
-  	SendPacket(who,DISABLE_LIST[i].foo, sizeof(DISABLE_ITEM), false);
-	what = findConfigMsg(DISABLE_LIST[i].foo[6], DISABLE_LIST[i].foo[7]);
+  	SendPacket(who,CONFIGURE_LIST[i].cmd_string, sizeof(CONFIGURE_ITEM), false);
+	what = findConfigMsg(CONFIGURE_LIST[i].cmd_string[6], CONFIGURE_LIST[i].cmd_string[7]);
 	
-	Serial.printf(">>> feature %s ... send at rate = %d \n", what, DISABLE_LIST[i].foo[8]);
+	Serial.printf(">>> feature %s ... send at rate = %d \n", what, CONFIGURE_LIST[i].cmd_string[8]);
   }
 	
   getConfig(); // 31.10 CFG-NAV5 (0x06 0x24)
@@ -672,39 +707,11 @@ void loop()
   getConfig(); // 31.10 CFG-NAV5 (0x06 0x24)
   getNEMA();   // 31.12 CFG-NMEA (0x06 0x17)
 
-  Serial.print("Navrate10hz ");
+  // crank up the reporting clock to .1 second
   SendPacket("Navrate to 10hz", Navrate10hz, sizeof(Navrate10hz), true);
 
   monitor(300000);
 
-  #if 0
-  Serial.printf("RELAY ENGAGED *\n");
-  colourBar(0, 0, 0); // dark
-
-
-    while (true)
-	{
-		uint8_t c;
-		bool one;
-		bool two;
-		
-		if (Serial1.available())
-		{
-			c = Serial1.read();
-			Serial2.write(c);
-			one ? colourNleds(0, 2, 2, 2, 0) : colourNleds(0, 2, 0, 2, 2);
-			one = !one;
-		}
-
-		if (Serial2.available())
-		{
-			c= Serial2.read();
-			Serial1.write(c);
-			two ? colourNleds(3, 2, 2, 0, 2) : colourNleds(3, 2, 0, 2, 0);
-			two = !two;
-		}
-	}
-	#endif
  }
 
 //------------------------------------------------------
@@ -729,24 +736,10 @@ void SendPacket(char *explain, const uint8_t *pPacket, uint8_t packetSize, bool 
 	  );
 
 	if (bDumpMsg) dumpPacket(pPacket,packetSize);
-#if 0
-	for (index = 0; index < packetSize; index++)
-	{
-		byteread = *pPacket++;
-		if (byteread < 0x10)
-		{
-		  Serial.print(F("0"));
-		}
-		Serial.print(byteread, HEX);
-		Serial.print(F(" "));
-	}
-#endif
-
 	Serial.println();
 
 	burnRxBuffers();
 
-retry:
 	pPacket = restore;
 
 	for (index = 0; index < packetSize; index++)
@@ -801,16 +794,9 @@ void setup()
   Serial.println();
 
 
-  /*
-     the gps chip could be still on 9600.
-     tell it to move to 115200
-     if it's already sitting no 11500, this 9600
-     will be garbage and thus rejected.
-  */
-  
   Serial2.begin(9600);
   getSetUart(115200); // 31.16.2 Polls and set the configuration for one I/O Port
 
-  // fine. The gps chip was already at 115200 or moved to it.
+  // fine. Assume we moved the chip up to 115200
   Serial2.begin(115200);
 }
