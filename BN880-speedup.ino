@@ -258,6 +258,12 @@ const CONFIGURE_ITEM CONFIGURE_LIST[] =
 	//		$GPZDA,082710.00,16,09,2002,00,00*64
 	{ 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,	 0xF0, 0x08,	100,	 0xFD, 0x15 },
 
+	// GGA - satellite stats
+	// 	$GPGGA,hhmmss.ss,Latitude,N,Longitude,E,FS,NoSV,HDOP,msl,m,Altref,m,DiffAge,DiffStation*cs
+	//  Example:
+	//	   $GPGGA,092725.00,4717.11399,N,00833.91590,E,1,8,1.01,499.6,M,48.0,M,,0*5B
+    { 0xB5, 0x62, 0x06, 0x01, 0x03, 0x00,    0xF0, 0x00,    10,     0x00, 0x00 },
+
 };
 //----------------------------------------------
 
